@@ -1,0 +1,192 @@
+name: Hivy Release Images
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build.
+        required: true
+        default: develop
+      tag:
+        description: Image tag to publish. Defaults to the selected ref.
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/penpot
+
+jobs:
+  prepare:
+    name: Prepare release metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      ref: ${{ steps.meta.outputs.ref }}
+      tag: ${{ steps.meta.outputs.tag }}
+      is_release: ${{ steps.meta.outputs.is_release }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+    steps:
+      - name: Resolve ref and tag
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "release" ]; then
+            ref="$RELEASE_TAG"
+            tag="$RELEASE_TAG"
+            is_release="true"
+            is_prerelease="$RELEASE_PRERELEASE"
+          else
+            ref="${INPUT_REF:-develop}"
+            tag="${INPUT_TAG:-$ref}"
+            tag="${tag#refs/heads/}"
+            tag="${tag#refs/tags/}"
+            tag="${tag//\//-}"
+            is_release="false"
+            is_prerelease="false"
+          fi
+
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "is_release=$is_release" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
+
+  build-bundles:
+    name: Build Penpot bundles
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Build required bundles
+        env:
+          BUILD_STORYBOOK: "no"
+          BUILD_WASM: "yes"
+        run: |
+          set -euo pipefail
+          ./manage.sh build-frontend-bundle
+          ./manage.sh build-mcp-bundle
+          ./manage.sh build-backend-bundle
+          ./manage.sh build-exporter-bundle
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: penpot-bundles
+          path: |
+            bundles/frontend
+            bundles/backend
+            bundles/exporter
+            bundles/mcp
+          retention-days: 7
+          if-no-files-found: error
+
+  build-images:
+    name: Build and publish ${{ matrix.image }}
+    needs:
+      - prepare
+      - build-bundles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.PUB_DOCKER_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.PUB_DOCKER_PASSWORD }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [frontend, backend, exporter, mcp]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Download bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: penpot-bundles
+          path: bundles
+
+      - name: Stage bundle for Docker build
+        run: |
+          set -euo pipefail
+          rm -rf "docker/images/bundle-${{ matrix.image }}"
+          mkdir -p "docker/images/bundle-${{ matrix.image }}"
+          cp -a "bundles/${{ matrix.image }}/." "docker/images/bundle-${{ matrix.image }}/"
+
+      - name: Compute image tags
+        id: tags
+        env:
+          IMAGE: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          IS_RELEASE: ${{ needs.prepare.outputs.is_release }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          sha_short="$(git rev-parse --short HEAD)"
+
+          {
+            echo "sha=$sha"
+            echo "sha_short=$sha_short"
+            echo "tags<<EOF"
+            echo "$IMAGE:$RELEASE_TAG"
+            echo "$IMAGE:$sha_short"
+            if [ "$IS_RELEASE" = "true" ] && [ "$IS_PRERELEASE" != "true" ]; then
+              echo "$IMAGE:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_PASSWORD != '' }}
+        uses: docker/login-action@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_PASSWORD }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./docker/images
+          file: ./docker/images/Dockerfile.${{ matrix.image }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.tags.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.tag }}
+            org.opencontainers.image.title=penpot-${{ matrix.image }}
+          cache-from: type=gha,scope=penpot-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=penpot-${{ matrix.image }}

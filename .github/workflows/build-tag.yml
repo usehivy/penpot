@@ -8,6 +8,10 @@ on:
 
 jobs:
   build-bundle:
+    # Hivy release images are built by hivy-release-images.yml. The upstream
+    # tag workflow depends on Kaleidos S3/runner secrets that this fork should
+    # not require for releases.
+    if: ${{ github.repository_owner != 'usehivy' }}
     uses: ./.github/workflows/build-bundle.yml
     secrets: inherit
     with:
@@ -16,6 +20,7 @@ jobs:
       build_storybook: "yes"
 
   build-docker:
+    if: ${{ github.repository_owner != 'usehivy' }}
     needs: build-bundle
     uses: ./.github/workflows/build-docker.yml
     secrets: inherit
@@ -23,6 +28,7 @@ jobs:
       gh_ref: ${{ github.ref_name }}
 
   notify:
+    if: ${{ github.repository_owner != 'usehivy' }}
     name: Notifications
     runs-on: ubuntu-24.04
     needs: build-docker
@@ -39,7 +45,7 @@ jobs:
             @infra
 
   publish-final-tag:
-    if: ${{ !contains(github.ref_name, '-RC') && !contains(github.ref_name, '-alpha') && !contains(github.ref_name, '-beta')  && contains(github.ref_name, '.') }}
+    if: ${{ github.repository_owner != 'usehivy' && !contains(github.ref_name, '-RC') && !contains(github.ref_name, '-alpha') && !contains(github.ref_name, '-beta')  && contains(github.ref_name, '.') }}
     needs: build-docker
     uses: ./.github/workflows/release.yml
     secrets: inherit
