@@ -130,6 +130,9 @@ jobs:
           rm -rf "docker/images/bundle-${{ matrix.image }}"
           mkdir -p "docker/images/bundle-${{ matrix.image }}"
           cp -a "bundles/${{ matrix.image }}/." "docker/images/bundle-${{ matrix.image }}/"
+          if [ -f "docker/images/bundle-${{ matrix.image }}/setup" ]; then
+            chmod 755 "docker/images/bundle-${{ matrix.image }}/setup"
+          fi
 
       - name: Compute image tags
         id: tags
