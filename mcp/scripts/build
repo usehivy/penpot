@@ -34,12 +34,31 @@ cp pnpm-lock.yaml ./dist/;
 
 touch ./dist/pnpm-workspace.yaml;
 
+node <<'EOF'
+const fs = require("fs");
+const path = "./dist/package.json";
+const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+
+if (pkg.dependencies) {
+  delete pkg.dependencies["penpot-mcp"];
+}
+
+delete pkg.devDependencies;
+delete pkg["ts-node"];
+
+fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+EOF
+
+pushd ./dist;
+pnpm install --prod --lockfile-only --no-frozen-lockfile;
+popd;
+
 cat <<EOF | tee ./dist/setup
-#/usr/bin/env bash
+#!/usr/bin/env bash
 set -e;
 corepack enable;
 corepack install;
-pnpm install -P
+pnpm install --prod --frozen-lockfile
 EOF
 
 chmod +x ./dist/setup;

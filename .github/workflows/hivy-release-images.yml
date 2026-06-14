@@ -159,7 +159,17 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if docker run --privileged --rm docker.io/tonistiigi/binfmt:latest --install arm64; then
+              exit 0
+            fi
+
+            sleep $((attempt * 10))
+          done
+
+          docker run --privileged --rm docker.io/tonistiigi/binfmt:latest --install arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
