@@ -8,12 +8,8 @@
   (:require
    [app.common.data.macros :as dm]
    [app.common.uri :as u]
-   [app.common.uuid :as uuid]
    [app.config :as cf]
-   [app.main.data.team :as dtm]
-   [app.main.errors :as errors]
    [app.main.features :as features]
-   [app.main.repo :as rp]
    [app.main.router :as rt]
    [app.main.store :as st]
    [app.util.storage :as storage]
@@ -22,69 +18,25 @@
    [potok.v2.core :as ptk]))
 
 (def routes
-  [["/auth"
-    ["/login"             :auth-login]
-    ["/register"          :auth-register]
-    ["/register/validate" :auth-register-validate]
-    ["/register/success"  :auth-register-success]
-    ["/recovery/request"  :auth-recovery-request]
-    ["/recovery"          :auth-recovery]
-    ["/verify-token"      :auth-verify-token]]
+  (cond-> [["/frame-preview" :frame-preview]
 
-   (when (contains? cf/flags :nitrate)
-     ["/subscribe-nitrate" :nitrate-entry])
+           ["/view" :viewer]
 
-   ["/settings"
-    ["/profile"       :settings-profile]
-    ["/password"      :settings-password]
-    ["/feedback"      :settings-feedback]
-    ["/options"       :settings-options]
-    ["/subscriptions" :settings-subscription]
-    ["/integrations"  :settings-integrations]
-    ["/notifications" :settings-notifications]]
+           ["/view/:file-id" :viewer-legacy]
 
-   ["/frame-preview" :frame-preview]
+           ;; Used for export
+           ["/render-sprite/:file-id" :render-sprite]
 
-   ["/view" :viewer]
+           ["/workspace" :workspace]
+           ["/workspace/:project-id/:file-id" :workspace-legacy]]
+    (contains? cf/flags :nitrate)
+    (conj ["/subscribe-nitrate" :nitrate-entry])
 
-   ["/view/:file-id" :viewer-legacy]
+    *assert*
+    (conj ["/debug/icons-preview" :debug-icons-preview])
 
-   (when *assert*
-     ["/debug/icons-preview" :debug-icons-preview])
-
-   (when *assert*
-     ["/debug/playground" :debug-playground])
-
-   ;; Used for export
-   ["/render-sprite/:file-id" :render-sprite]
-
-   ["/dashboard"
-    ["/members"              :dashboard-members]
-    ["/invitations"          :dashboard-invitations]
-    ["/webhooks"             :dashboard-webhooks]
-    ["/settings"             :dashboard-settings]
-    ["/recent"               :dashboard-recent]
-    ["/search"               :dashboard-search]
-    ["/fonts"                :dashboard-fonts]
-    ["/fonts/providers"      :dashboard-font-providers]
-    ["/libraries"            :dashboard-libraries]
-    ["/files"                :dashboard-files]
-    ["/deleted" :dashboard-deleted]]
-
-   ["/dashboard/team/:team-id"
-    ["/members"              :dashboard-legacy-team-members]
-    ["/invitations"          :dashboard-legacy-team-invitations]
-    ["/webhooks"             :dashboard-legacy-team-webhooks]
-    ["/settings"             :dashboard-legacy-team-settings]
-    ["/projects"             :dashboard-legacy-projects]
-    ["/search"               :dashboard-legacy-search]
-    ["/fonts"                :dashboard-legacy-fonts]
-    ["/fonts/providers"      :dashboard-legacy-font-providers]
-    ["/libraries"            :dashboard-legacy-libraries]
-    ["/projects/:project-id" :dashboard-legacy-files]]
-
-   ["/workspace" :workspace]
-   ["/workspace/:project-id/:file-id" :workspace-legacy]])
+    *assert*
+    (conj ["/debug/playground" :debug-playground])))
 
 
 (defn- store-session-params
@@ -115,34 +67,10 @@
       (st/emit! (rt/navigated match send-event-info?))
 
       :else
-      ;; We just recheck with an additional profile request; this
-      ;; avoids some race conditions that causes unexpected redirects
-      ;; on invitations workflows (and probably other cases).
-      (->> (rp/cmd! :get-profile)
-           (rx/mapcat (fn [profile]
-                        (->> (rp/cmd! :get-teams {})
-                             (rx/map (fn [teams]
-                                       (assoc profile ::teams (into #{} (map :id) teams)))))))
-           (rx/subs! (fn [{:keys [id ::teams] :as profile}]
-                       (cond
-                         (= id uuid/zero)
-                         (do
-                           (store-session-params query-params)
-                           (st/emit! (rt/nav :auth-login)))
-
-                         empty-path?
-                         (let [team-id (dtm/get-last-team-id)]
-                           (if (contains? teams team-id)
-                             (st/emit! (rt/nav :dashboard-recent
-                                               (assoc query-params :team-id team-id)))
-                             (st/emit! (rt/nav :dashboard-recent
-                                               (assoc query-params :team-id (:default-team-id profile))))))
-
-                         :else
-                         (st/emit! (rt/assign-exception {:type :not-found}))))
-
-                     (fn [cause]
-                       (errors/on-error cause)))))))
+      (do
+        (when empty-path?
+          (store-session-params query-params))
+        (st/emit! (rt/assign-exception {:type :not-found}))))))
 
 (defn init-routes
   []

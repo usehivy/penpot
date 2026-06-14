@@ -37,20 +37,8 @@
    [beicon.v2.core :as rx]
    [rumext.v2 :as mf]))
 
-(def auth-page
-  (mf/lazy #(mod/load 'app.main.ui.auth/auth-page*)))
-
-(def verify-token-page*
-  (mf/lazy #(mod/load 'app.main.ui.auth.verify-token/verify-token-page*)))
-
 (def viewer-page*
   (mf/lazy #(mod/load 'app.main.ui.viewer/viewer-page*)))
-
-(def dashboard-page*
-  (mf/lazy #(mod/load 'app.main.ui.dashboard/dashboard-page*)))
-
-(def settings-page*
-  (mf/lazy #(mod/load 'app.main.ui.settings/settings-page*)))
 
 (def workspace-page*
   (mf/lazy #(mod/load 'app.main.ui.workspace/workspace-page*)))
@@ -70,44 +58,6 @@
   [:> loader*
    {:title (tr "labels.loading")
     :overlay true}])
-
-(mf/defc dashboard-legacy-redirect*
-  {::mf/props :obj
-   ::mf/private true}
-  [{:keys [section team-id project-id search-term plugin-url template]}]
-  (let [section (case section
-                  :dashboard-legacy-search
-                  :dashboard-search
-                  :dashboard-legacy-projects
-                  :dashboard-recent
-                  :dashboard-legacy-files
-                  :dashboard-files
-                  :dashboard-legacy-libraries
-                  :dashboard-libraries
-                  :dashboard-legacy-fonts
-                  :dashboard-fonts
-                  :dashboard-legacy-font-providers
-                  :dashboard-font-providers
-                  :dashboard-legacy-team-members
-                  :dashboard-members
-                  :dashboard-legacy-team-invitations
-                  :dashboard-invitations
-                  :dashboard-legacy-team-webhooks
-                  :dashboard-webhooks
-                  :dashboard-legacy-team-settings
-                  :dashboard-settings)]
-
-    (mf/with-effect []
-      (let [params {:team-id team-id
-                    :project-id project-id
-                    :search-term search-term
-                    :plugin plugin-url
-                    :template template}]
-        (st/emit! (rt/nav section (d/without-nils params)))))
-
-    [:> loader*
-     {:title (tr "labels.loading")
-      :overlay true}]))
 
 (mf/defc viewer-legacy-redirect*
   {::mf/props :obj
@@ -180,34 +130,8 @@
 
     [:& (mf/provider ctx/current-route) {:value route}
      (case section
-       (:auth-login
-        :auth-register
-        :auth-register-validate
-        :auth-register-success
-        :auth-recovery-request
-        :auth-recovery)
-       [:? [:& auth-page {:route route}]]
-
-       :auth-verify-token
-       [:? [:> verify-token-page* {:route route}]]
-
        :nitrate-entry
        [:> nitrate-entry/nitrate-entry-page* {:profile profile}]
-
-       (:settings-profile
-        :settings-password
-        :settings-options
-        :settings-feedback
-        :settings-subscription
-        :settings-integrations
-        :settings-notifications)
-       (let [params (get params :query)
-             error-report-id (some-> params :error-report-id uuid/parse*)]
-         [:? [:> settings-page*
-              {:route route
-               :type (get params :type)
-               :error-report-id error-report-id
-               :error-href (get params :error-href)}]])
 
        :debug-icons-preview
        (when *assert*
@@ -216,48 +140,6 @@
        :debug-playground
        (when *assert*
          [:> playground*])
-
-       (:dashboard-search
-        :dashboard-recent
-        :dashboard-files
-        :dashboard-libraries
-        :dashboard-fonts
-        :dashboard-font-providers
-        :dashboard-members
-        :dashboard-invitations
-        :dashboard-webhooks
-        :dashboard-settings
-        :dashboard-deleted)
-       (let [params        (get params :query)
-             team-id       (some-> params :team-id uuid/parse*)
-             project-id    (some-> params :project-id uuid/parse*)
-             search-term   (some-> params :search-term)
-             plugin-url    (some-> params :plugin)
-             template      (some-> params :template)]
-         [:?
-          #_[:& app.main.ui.releases/release-notes-modal {:version "2.5"}]
-          #_[:& app.main.ui.onboarding/onboarding-templates-modal]
-          #_[:& app.main.ui.onboarding/onboarding-modal]
-          #_[:> app.main.ui.onboarding.team-choice/onboarding-team-modal*]
-
-          (cond
-            show-question-modal?
-            [:& questions-modal]
-
-            show-team-modal?
-            [:> onboarding-team-modal* {:go-to-team true}]
-
-            show-release-modal?
-            [:& release-notes-modal {:version (:main cf/version)}])
-
-          [:> team-container* {:team-id team-id}
-           [:> dashboard-page* {:profile profile
-                                :section section
-                                :team-id team-id
-                                :search-term search-term
-                                :plugin-url plugin-url
-                                :project-id project-id
-                                :template template}]]])
 
        :workspace
        (let [params     (get params :query)
@@ -321,29 +203,6 @@
            :file-id file-id
            :page-id page-id
            :layout layout}])
-
-       (:dashboard-legacy-search
-        :dashboard-legacy-projects
-        :dashboard-legacy-files
-        :dashboard-legacy-libraries
-        :dashboard-legacy-fonts
-        :dashboard-legacy-font-providers
-        :dashboard-legacy-team-members
-        :dashboard-legacy-team-invitations
-        :dashboard-legacy-team-webhooks
-        :dashboard-legacy-team-settings)
-       (let [team-id     (some-> params :path :team-id uuid/parse*)
-             project-id  (some-> params :path :project-id uuid/parse*)
-             search-term (some-> params :query :search-term)
-             plugin-url  (some-> params :query :plugin)
-             template    (some-> params :template)]
-         [:> dashboard-legacy-redirect*
-          {:team-id team-id
-           :section section
-           :project-id project-id
-           :search-term search-term
-           :plugin-url plugin-url
-           :template template}])
 
        :viewer-legacy
        (let [{:keys [query-params path-params]} route

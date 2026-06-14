@@ -118,6 +118,7 @@
     [:nitrate-shared-key {:optional true} :string]
     [:nexus-shared-key {:optional true} :string]
     [:management-api-key {:optional true} :string]
+    [:hivy-control-plane-key {:optional true} :string]
 
     [:telemetry-uri {:optional true} :string]
     [:telemetry-with-taiga {:optional true} ::sm/boolean] ;; DELETE

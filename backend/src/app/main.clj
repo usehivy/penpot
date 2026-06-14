@@ -20,6 +20,7 @@
    [app.http.awsns :as http.awsns]
    [app.http.client :as-alias http.client]
    [app.http.debug :as-alias http.debug]
+   [app.http.hivy :as hivy]
    [app.http.management :as mgmt]
    [app.http.session :as session]
    [app.http.session.tasks :as-alias session.tasks]
@@ -271,6 +272,11 @@
    {::db/pool            (ig/ref ::db/pool)
     ::setup/props        (ig/ref ::setup/props)}
 
+   ::hivy/routes
+   {::db/pool            (ig/ref ::db/pool)
+    ::setup/props        (ig/ref ::setup/props)
+    ::session/manager    (ig/ref ::session/manager)}
+
    :app.http/router
    {::session/manager    (ig/ref ::session/manager)
     ::db/pool            (ig/ref ::db/pool)
@@ -278,6 +284,7 @@
     ::setup/props        (ig/ref ::setup/props)
     ::mtx/routes         (ig/ref ::mtx/routes)
     ::oidc/routes        (ig/ref ::oidc/routes)
+    ::hivy/routes        (ig/ref ::hivy/routes)
     ::mgmt/routes        (ig/ref ::mgmt/routes)
     ::http.debug/routes  (ig/ref ::http.debug/routes)
     ::http.assets/routes (ig/ref ::http.assets/routes)

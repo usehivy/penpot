@@ -8,12 +8,8 @@
   (:require-macros [app.main.style :as stl])
   (:require
    [app.common.data.macros :as dm]
-   [app.main.data.common :as dcm]
-   [app.main.data.modal :as modal]
    [app.main.data.workspace :as dw]
-   [app.main.data.workspace.colors :as dc]
    [app.main.refs :as refs]
-   [app.main.router :as rt]
    [app.main.store :as st]
    [app.main.ui.icons :as deprecated-icon]
    [app.main.ui.workspace.main-menu :as main-menu]
@@ -29,7 +25,6 @@
   [{:keys [file layout project class]}]
   (let [file-id     (:id file)
         file-name   (:name file)
-        project-id  (:id project)
         shared?     (:is-shared file)
         persistence
         (mf/deref refs/persistence)
@@ -61,40 +56,17 @@
         (mf/use-fn
          (fn [event]
            (dom/prevent-default event)
-           (reset! editing* true)))
-
-        close-modals
-        (mf/use-fn
-         #(st/emit! (dc/stop-picker)
-                    (modal/hide)))
-
-        go-back
-        (mf/use-fn
-         (fn []
-           (close-modals)
-           ;; FIXME: move set-mode to uri?
-           (st/emit! :interrupt
-                     (dw/set-options-mode :design)
-                     (dcm/go-to-dashboard-recent))))
-
-        nav-to-project
-        (mf/use-fn
-         (mf/deps project-id)
-         #(st/emit! :interrupt
-                    (dcm/go-to-dashboard-files ::rt/new-window true :project-id project-id)))]
+           (reset! editing* true)))]
 
     (mf/with-effect [editing?]
       (when ^boolean editing?
         (dom/select-text! (mf/ref-val input-ref))))
 
     [:header {:class (dm/str class " " (stl/css :workspace-header-left))}
-     [:a {:on-click go-back
-          :class (stl/css :main-icon)} deprecated-icon/logo-icon]
      [:div {:alt (tr "workspace.sitemap")
             :class (stl/css :project-tree)}
       [:div
-       {:class (stl/css :project-name)
-        :on-click nav-to-project}
+       {:class (stl/css :project-name)}
        (:name project)]
       (if ^boolean editing?
         [:input

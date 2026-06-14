@@ -81,13 +81,6 @@
                                 ::ev/origin "workspace:menu"}))
            (dom/open-new-window "https://www.youtube.com/c/Penpot")))
 
-        nav-to-templates
-        (mf/use-fn
-         (fn []
-           (st/emit! (ev/event {::ev/name "explore-libraries-click"
-                                ::ev/origin "workspace"}))
-           (dom/open-new-window "https://penpot.app/libraries-templates")))
-
         nav-to-github
         (mf/use-fn
          (fn []
@@ -101,9 +94,6 @@
            (st/emit! (ev/event {::ev/name "explore-terms-service-click"
                                 ::ev/origin "workspace:menu"}))
            (dom/open-new-window "https://penpot.app/terms")))
-
-        nav-to-feedback
-        (mf/use-fn #(st/emit! (dcm/go-to-feedback)))
 
         plugins?
         (features/active-feature? @st/state "plugins/runtime")
@@ -178,15 +168,6 @@
        (tr "labels.release-notes")]]
 
      [:> dropdown-menu-item* {:class (stl/css :base-menu-item :submenu-item)
-                              :on-click    nav-to-templates
-                              :on-key-down (fn [event]
-                                             (when (kbd/enter? event)
-                                               (nav-to-templates event)))
-                              :id          "file-menu-templates"}
-      [:span {:class (stl/css :item-name)}
-       (tr "labels.libraries-and-templates")]]
-
-     [:> dropdown-menu-item* {:class (stl/css :base-menu-item :submenu-item)
                               :on-click    nav-to-github
                               :on-key-down (fn [event]
                                              (when (kbd/enter? event)
@@ -212,17 +193,7 @@
                               :id          "file-menu-shortcuts"}
       [:span {:class (stl/css :item-name)}
        (tr "label.shortcuts")]
-      [:> shortcuts* {:id :show-shortcuts}]]
-
-     (when (contains? cf/flags :user-feedback)
-       [:> dropdown-menu-item* {:class (stl/css :base-menu-item :submenu-item)
-                                :on-click    nav-to-feedback
-                                :on-key-down (fn [event]
-                                               (when (kbd/enter? event)
-                                                 (nav-to-feedback event)))
-                                :id          "file-menu-feedback"}
-        [:span {:class (stl/css :feedback :item-name)}
-         (tr "labels.give-feedback")]])]))
+      [:> shortcuts* {:id :show-shortcuts}]]]))
 
 (mf/defc preferences-menu*
   {::mf/private true
@@ -806,19 +777,6 @@
 
         show-enabled?   (and mcp-enabled? (false? expired?))
 
-        on-nav-to-integrations
-        (mf/use-fn
-         (fn []
-           (st/emit! (ev/event {::ev/name "manage-mpc-option"
-                                ::ev/origin "workspace:menu"}))
-           (dom/open-new-window "/#/settings/integrations")))
-
-        on-nav-to-integrations-key-down
-        (mf/use-fn
-         (fn [event]
-           (when (kbd/enter? event)
-             (on-nav-to-integrations))))
-
         on-toggle-mcp-plugin
         (mf/use-fn
          (fn []
@@ -836,14 +794,14 @@
            (when (kbd/enter? event)
              (on-toggle-mcp-plugin))))]
 
-    [:> dropdown-menu* {:show true
-                        :class (stl/css-case :base-menu true
-                                             :sub-menu true
-                                             :pos-5 (not plugins?)
-                                             :pos-6 plugins?)
-                        :on-close on-close}
+    (when show-enabled?
+      [:> dropdown-menu* {:show true
+                          :class (stl/css-case :base-menu true
+                                               :sub-menu true
+                                               :pos-5 (not plugins?)
+                                               :pos-6 plugins?)
+                          :on-close on-close}
 
-     (when (and show-enabled? (not expired?))
        [:> dropdown-menu-item* {:id          "mcp-menu-toggle-mcp-plugin"
                                 :class       (stl/css :base-menu-item :submenu-item)
                                 :on-click    on-toggle-mcp-plugin
@@ -851,16 +809,7 @@
         [:span {:class (stl/css :item-name)}
          (if mcp-connected?
            (tr "workspace.header.menu.mcp.plugin.status.disconnect")
-           (tr "workspace.header.menu.mcp.plugin.status.connect"))]])
-
-     [:> dropdown-menu-item* {:id          "mcp-menu-nav-to-integrations"
-                              :class       (stl/css :base-menu-item :submenu-item)
-                              :on-click    on-nav-to-integrations
-                              :on-key-down on-nav-to-integrations-key-down}
-      [:span {:class (stl/css :item-name)}
-       (if show-enabled?
-         (tr "workspace.header.menu.mcp.server.status.enabled")
-         (tr "workspace.header.menu.mcp.server.status.disabled"))]]]))
+           (tr "workspace.header.menu.mcp.plugin.status.connect"))]]])))
 
 (mf/defc menu*
   [{:keys [layout file]}]
@@ -1073,25 +1022,27 @@
               mcp-connected? (= mcp-connection "connected")
               mcp-error?     (= mcp-connection "error")
 
+              show-enabled? (and mcp-enabled? (false? expired?))
               active?  (and mcp-enabled? mcp-connected?)
               failed?  (or (and mcp-enabled? mcp-error?)
                            (true? expired?))]
 
-          [:> dropdown-menu-item* {:class (stl/css :base-menu-item :menu-item)
-                                   :on-click    on-menu-click
-                                   :on-key-down (fn [event]
-                                                  (when (kbd/enter? event)
-                                                    (on-menu-click event)))
-                                   :on-pointer-enter on-menu-click
-                                   :data-testid "mcp"
-                                   :id          "file-menu-mcp"}
-           [:span {:class (stl/css :item-name)}
-            (tr "workspace.header.menu.option.mcp")]
-           [:span {:class (stl/css-case :item-indicator true
-                                        :active active?
-                                        :failed failed?)}]
-           [:> icon* {:icon-id i/arrow-right
-                      :class (stl/css :item-arrow)}]]))
+          (when show-enabled?
+            [:> dropdown-menu-item* {:class (stl/css :base-menu-item :menu-item)
+                                     :on-click    on-menu-click
+                                     :on-key-down (fn [event]
+                                                    (when (kbd/enter? event)
+                                                      (on-menu-click event)))
+                                     :on-pointer-enter on-menu-click
+                                     :data-testid "mcp"
+                                     :id          "file-menu-mcp"}
+             [:span {:class (stl/css :item-name)}
+              (tr "workspace.header.menu.option.mcp")]
+             [:span {:class (stl/css-case :item-indicator true
+                                          :active active?
+                                          :failed failed?)}]
+             [:> icon* {:icon-id i/arrow-right
+                        :class (stl/css :item-arrow)}]])))
 
       [:div {:class (stl/css :separator)}]
 
