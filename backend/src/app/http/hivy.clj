@@ -23,6 +23,7 @@
    [app.rpc.commands.profile :as cmd.profile]
    [app.rpc.commands.teams :as cmd.teams]
    [app.rpc.permissions :as perms]
+   [app.storage :as sto]
    [buddy.sign.jwt :as jwt]
    [clojure.string :as str]
    [integrant.core :as ig]
@@ -42,6 +43,7 @@
 (defmethod ig/assert-key ::routes
   [_ params]
   (assert (db/pool? (::db/pool params)) "expect valid database pool")
+  (assert (sto/valid-storage? (::sto/storage params)) "expect valid storage")
   (assert (session/manager? (::session/manager params)) "expect valid session manager"))
 
 (def ^:private default-system
