@@ -487,7 +487,10 @@
     :fn (mg/resource "app/migrations/sql/0149-mod-file-library-rel-synced-at.sql")}
 
    {:name "0150-add-hivy-id-to-team"
-    :fn (mg/resource "app/migrations/sql/0150-add-hivy-id-to-team.sql")}])
+    :fn (mg/resource "app/migrations/sql/0150-add-hivy-id-to-team.sql")}
+
+   {:name "0150-mod-http-session-v2"
+    :fn (mg/resource "app/migrations/sql/0150-mod-http-session-v2.sql")}])
 
 (defn apply-migrations!
   [pool name migrations]
